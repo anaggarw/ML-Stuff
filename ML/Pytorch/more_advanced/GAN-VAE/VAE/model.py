@@ -38,13 +38,14 @@ class Discriminator(nn.Module):
         # encoder
         self.img_2hid = nn.Linear(input_dim, h_dim)
         self.hid_2mu = nn.Linear(h_dim, z_dim)
-        self.hid_2mu2 = nn.Linear(z_dim, z_dim)
+        #self.hid_2mu2 = nn.Linear(z_dim, z_dim)
         self.hid_2sigma = nn.Linear(h_dim, z_dim)
         self.relu = nn.ReLU()
-        self.rectify = nn.ReLU()
+        #self.rectify = nn.ReLU()
     def encode(self, x):
         h = self.relu(self.img_2hid(x))
-        mu, sigma = self.hid_2mu2(self.hid_2mu(h)), self.rectify(self.hid_2sigma(h))
+        #mu, sigma = self.hid_2mu2(self.hid_2mu(h)), self.rectify(self.hid_2sigma(h))
+        mu, sigma = self.hid_2mu(h), self.hid_2sigma(h)
         return mu, sigma
 
     def forward(self, x):
