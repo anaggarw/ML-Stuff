@@ -41,7 +41,7 @@ class Discriminator(nn.Module):
         self.hid_2mu2 = nn.Linear(z_dim, z_dim)
         self.hid_2sigma = nn.Linear(h_dim, z_dim)
         self.relu = nn.ReLU()
-        self.rectify = nn.Softplus() #nn.ReLU()
+        self.rectify = nn.Softplus(beta=20, threshold=1) #nn.ReLU()
     def encode(self, x):
         h = self.relu(self.img_2hid(x))
         mu, sigma = self.hid_2mu2(self.hid_2mu(h)), self.rectify(self.hid_2sigma(h))
