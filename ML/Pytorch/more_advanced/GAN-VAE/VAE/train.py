@@ -14,8 +14,9 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 INPUT_DIM = 784
 H_DIM = 200
 Z_DIM = 20
-NUM_EPOCHS = 500
+NUM_EPOCHS = 50
 BATCH_SIZE = 32
+ERR_TERM = 1e-10
 LR = 3e-4  # Karpathy constant
 
 # Dataset Loading
@@ -29,7 +30,7 @@ gen = Generator(INPUT_DIM).to(DEVICE)
 opt_disc = optim.Adam(disc.parameters(), lr=LR)
 opt_gen = optim.Adam(gen.parameters(), lr=LR)
 #loss_fn = nn.BCELoss(reduction="sum")
-criterion = nn.MSELoss(reduction="sum")#nn.GaussianNLLLoss(reduction="mean")
+criterion = nn.GaussianNLLLoss(reduction="sum")
 step = 0
 
 
@@ -45,23 +46,23 @@ for epoch in range(NUM_EPOCHS):
         fake = gen(noise)
         disc_real_mu, disc_real_sigma = disc(real)#.view(-1)
         #kl_div_real
-        lossD_real = -torch.sum(1 + torch.log(disc_real_sigma.pow(2)) - disc_real_mu.pow(2) - disc_real_sigma.pow(2))
+        lossD_real = -torch.sum(1 + torch.log(disc_real_sigma.pow(2)+ERR_TERM) - disc_real_mu.pow(2) - disc_real_sigma.pow(2))
         #lossD_real = kl_div_real #criterion(disc_real, torch.ones_like(disc_real))
         disc_fake_mu, disc_fake_sigma = disc(fake)#.view(-1)
         #kl_div_fake
-        lossD_fake = -torch.sum(1 + torch.log(disc_fake_sigma.pow(2)) - disc_fake_mu.pow(2) - disc_fake_sigma.pow(2))
+        lossD_fake = -torch.sum(1 + torch.log(disc_fake_sigma.pow(2)+ERR_TERM) - disc_fake_mu.pow(2) - disc_fake_sigma.pow(2))
         #lossD_fake = kl_div_fake #criterion(disc_fake, torch.zeros_like(disc_fake))
-        lossD = (lossD_real - (lossD_fake)) #/ 2
+        lossD = (lossD_real - (lossD_fake))/ 2
         disc.zero_grad()
         lossD.backward(retain_graph=True)
         opt_disc.step()
 
         ### Train Generator:
         output_mu, output_sigma = disc(fake)#.view(-1)
-        kl_div_G = -torch.sum(1 + torch.log(output_sigma.pow(2)) - output_mu.pow(2) - output_sigma.pow(2))#criterion(output_mu, noise, output_sigma)
-        epsilon_out = torch.randn_like(output_sigma)
-        z_out = output_mu + output_sigma * epsilon_out
-        lossG = kl_div_G + criterion(z_out, noise)
+        #kl_div_G = -torch.sum(1 + torch.log(output_sigma.pow(2)) - output_mu.pow(2) - output_sigma.pow(2))#criterion(output_mu, noise, output_sigma)
+        #epsilon_out = torch.randn_like(output_sigma)
+        #z_out = output_mu + output_sigma * epsilon_out
+        lossG = criterion(output_mu, noise, output_sigma)
         gen.zero_grad()
         lossG.backward()
         opt_gen.step()
@@ -70,7 +71,7 @@ for epoch in range(NUM_EPOCHS):
         if batch_idx == 0:
             print(
                 f"Epoch [{epoch}/{NUM_EPOCHS}] Batch {batch_idx}/{len(train_loader)} \
-                      Loss D: {lossD:.4f}, comprised of real loss: {lossD_real:.4f} and fake loss {lossD_fake:.4f}, and loss G: {lossG:.4f}, with kldiv loss {kl_div_G:.4f}"
+                      Loss D: {lossD:.4f}, comprised of real loss: {lossD_real:.4f} and fake loss {lossD_fake:.4f}, and loss G: {lossG:.4f}"#, with kldiv loss {kl_div_G:.4f}"
             )
 
             with torch.no_grad():
