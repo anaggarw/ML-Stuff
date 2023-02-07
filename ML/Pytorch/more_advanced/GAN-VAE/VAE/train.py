@@ -16,7 +16,7 @@ H_DIM = 200
 Z_DIM = 20
 NUM_EPOCHS = 50
 BATCH_SIZE = 32
-ERR_TERM = 1e-10
+ERR_TERM = 1e-6
 LR = 3e-4  # Karpathy constant
 
 # Dataset Loading
@@ -30,7 +30,7 @@ gen = Generator(INPUT_DIM).to(DEVICE)
 opt_disc = optim.Adam(disc.parameters(), lr=LR)
 opt_gen = optim.Adam(gen.parameters(), lr=LR)
 #loss_fn = nn.BCELoss(reduction="sum")
-criterion = nn.GaussianNLLLoss(reduction="sum")
+criterion = nn.GaussianNLLLoss(reduction="mean")
 step = 0
 
 
@@ -46,11 +46,11 @@ for epoch in range(NUM_EPOCHS):
         fake = gen(noise)
         disc_real_mu, disc_real_sigma = disc(real)#.view(-1)
         #kl_div_real
-        lossD_real = -torch.sum(1 + torch.log(disc_real_sigma.pow(2)+ERR_TERM) - disc_real_mu.pow(2) - disc_real_sigma.pow(2))
+        lossD_real = -torch.mean(1 + torch.log(disc_real_sigma.pow(2)+ERR_TERM) - disc_real_mu.pow(2) - disc_real_sigma.pow(2))
         #lossD_real = kl_div_real #criterion(disc_real, torch.ones_like(disc_real))
         disc_fake_mu, disc_fake_sigma = disc(fake)#.view(-1)
         #kl_div_fake
-        lossD_fake = -torch.sum(1 + torch.log(disc_fake_sigma.pow(2)+ERR_TERM) - disc_fake_mu.pow(2) - disc_fake_sigma.pow(2))
+        lossD_fake = -torch.mean(1 + torch.log(disc_fake_sigma.pow(2)+ERR_TERM) - disc_fake_mu.pow(2) - disc_fake_sigma.pow(2))
         #lossD_fake = kl_div_fake #criterion(disc_fake, torch.zeros_like(disc_fake))
         lossD = (lossD_real - (lossD_fake))/ 2
         disc.zero_grad()
