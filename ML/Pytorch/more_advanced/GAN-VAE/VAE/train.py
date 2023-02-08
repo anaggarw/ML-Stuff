@@ -14,10 +14,10 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 INPUT_DIM = 784
 H_DIM = 200
 Z_DIM = 20
-NUM_EPOCHS = 50
+NUM_EPOCHS = 125
 BATCH_SIZE = 32
-ERR_TERM = 1e-6
-LR = 3e-4  # Karpathy constant
+ERR_TERM = 1e-3
+LR = 1e-5  # Karpathy constant (subject to change, lol)
 
 # Dataset Loading
 dataset = datasets.MNIST(root="dataset/", train=True, transform=transforms.ToTensor(), download=True)
@@ -31,6 +31,7 @@ opt_disc = optim.Adam(disc.parameters(), lr=LR)
 opt_gen = optim.Adam(gen.parameters(), lr=LR)
 #loss_fn = nn.BCELoss(reduction="sum")
 criterion = nn.GaussianNLLLoss(reduction="mean")
+mse_loss = nn.MSELoss(reduction="mean")
 step = 0
 
 
@@ -59,10 +60,11 @@ for epoch in range(NUM_EPOCHS):
 
         ### Train Generator:
         output_mu, output_sigma = disc(fake)#.view(-1)
-        #kl_div_G = -torch.sum(1 + torch.log(output_sigma.pow(2)) - output_mu.pow(2) - output_sigma.pow(2))#criterion(output_mu, noise, output_sigma)
-        #epsilon_out = torch.randn_like(output_sigma)
-        #z_out = output_mu + output_sigma * epsilon_out
-        lossG = criterion(output_mu, noise, output_sigma)
+        kl_div_G = -torch.sum(1 + torch.log(output_sigma.pow(2)) - output_mu.pow(2) - output_sigma.pow(2))#criterion(output_mu, noise, output_sigma)
+        epsilon_out = torch.randn_like(output_sigma)
+        z_out = output_mu + output_sigma * epsilon_out
+        output_match_loss = mse_loss(z_out, noise)
+        lossG = kl_div_G + criterion(output_mu, noise, output_sigma) + output_match_loss
         gen.zero_grad()
         lossG.backward()
         opt_gen.step()
@@ -71,7 +73,7 @@ for epoch in range(NUM_EPOCHS):
         if batch_idx == 0:
             print(
                 f"Epoch [{epoch}/{NUM_EPOCHS}] Batch {batch_idx}/{len(train_loader)} \
-                      Loss D: {lossD:.4f}, comprised of real loss: {lossD_real:.4f} and fake loss {lossD_fake:.4f}, and loss G: {lossG:.4f}"#, with kldiv loss {kl_div_G:.4f}"
+                      Loss D: {lossD:.4f}, comprised of real loss: {lossD_real:.4f} and fake loss {lossD_fake:.4f}, and loss G: {lossG:.4f}, with kldiv loss {kl_div_G:.4f}"
             )
 
             with torch.no_grad():
