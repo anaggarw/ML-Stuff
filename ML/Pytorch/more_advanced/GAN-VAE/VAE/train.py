@@ -14,9 +14,9 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 INPUT_DIM = 784
 H_DIM = 200
 Z_DIM = 20
-NUM_EPOCHS = 125
+NUM_EPOCHS = 250000
 BATCH_SIZE = 32
-ERR_TERM = 1e-3
+ERR_TERM = 1.2e-9
 LR = 1e-5  # Karpathy constant (subject to change, lol)
 
 # Dataset Loading
@@ -53,14 +53,14 @@ for epoch in range(NUM_EPOCHS):
         #kl_div_fake
         lossD_fake = -torch.mean(1 + torch.log(disc_fake_sigma.pow(2)+ERR_TERM) - disc_fake_mu.pow(2) - disc_fake_sigma.pow(2))
         #lossD_fake = kl_div_fake #criterion(disc_fake, torch.zeros_like(disc_fake))
-        lossD = (lossD_real - (lossD_fake))/ 2
+        lossD = (lossD_real - (lossD_fake))
         disc.zero_grad()
         lossD.backward(retain_graph=True)
         opt_disc.step()
 
         ### Train Generator:
         output_mu, output_sigma = disc(fake)#.view(-1)
-        kl_div_G = -torch.sum(1 + torch.log(output_sigma.pow(2)) - output_mu.pow(2) - output_sigma.pow(2))#criterion(output_mu, noise, output_sigma)
+        kl_div_G = -torch.mean(1 + torch.log(output_sigma.pow(2)+ERR_TERM) - output_mu.pow(2) - output_sigma.pow(2))#criterion(output_mu, noise, output_sigma)
         epsilon_out = torch.randn_like(output_sigma)
         z_out = output_mu + output_sigma * epsilon_out
         output_match_loss = mse_loss(z_out, noise)
