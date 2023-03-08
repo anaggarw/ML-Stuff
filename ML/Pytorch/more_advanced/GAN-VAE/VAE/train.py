@@ -14,7 +14,7 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 INPUT_DIM = 784
 H_DIM = 200
 Z_DIM = 20
-NUM_EPOCHS = 75000
+NUM_EPOCHS = 100
 BATCH_SIZE = 32
 ERR_TERM = 1.2e-9
 LR = 1e-5  # Karpathy constant (subject to change, lol)
@@ -41,41 +41,41 @@ for epoch in range(NUM_EPOCHS):
     for batch_idx, (real, _) in loop:
         real = real.view(-1, 784).to(DEVICE)
         batch_size = real.shape[0]
+        #if (epoch % 2) == 1:
+        if (epoch < 0):
+            ### Train Discriminator: max log(D(x)) + log(1 - D(G(z)))
+            noise = torch.randn(batch_size, Z_DIM).to(DEVICE)
+            fake = gen(noise)
+            disc_real_mu, disc_real_sigma = disc(real)#.view(-1)
+            #kl_div_real
+            lossD_real = -torch.mean(1 + torch.log(disc_real_sigma.pow(2)+ERR_TERM) - disc_real_mu.pow(2) - disc_real_sigma.pow(2))
+            #lossD_real = kl_div_real #criterion(disc_real, torch.ones_like(disc_real))
+            disc_fake_mu, disc_fake_sigma = disc(fake)#.view(-1)
+            #kl_div_fake
+            lossD_fake = -torch.mean(1 + torch.log(disc_fake_sigma.pow(2)+ERR_TERM) - disc_fake_mu.pow(2) - disc_fake_sigma.pow(2))
+            #lossD_fake = kl_div_fake #criterion(disc_fake, torch.zeros_like(disc_fake))
+            lossD = (lossD_real - (lossD_fake))
+            disc.zero_grad()
+            lossD.backward(retain_graph=True)
+            opt_disc.step()
 
-        ### Train Discriminator: max log(D(x)) + log(1 - D(G(z)))
-        noise = torch.randn(batch_size, Z_DIM).to(DEVICE)
-        fake = gen(noise)
-        disc_real_mu, disc_real_sigma = disc(real)#.view(-1)
-        #kl_div_real
-        lossD_real = -torch.mean(1 + torch.log(disc_real_sigma.pow(2)+ERR_TERM) - disc_real_mu.pow(2) - disc_real_sigma.pow(2))
-        #lossD_real = kl_div_real #criterion(disc_real, torch.ones_like(disc_real))
-        disc_fake_mu, disc_fake_sigma = disc(fake)#.view(-1)
-        #kl_div_fake
-        lossD_fake = -torch.mean(1 + torch.log(disc_fake_sigma.pow(2)+ERR_TERM) - disc_fake_mu.pow(2) - disc_fake_sigma.pow(2))
-        #lossD_fake = kl_div_fake #criterion(disc_fake, torch.zeros_like(disc_fake))
-        lossD = (lossD_real - (lossD_fake))
-        disc.zero_grad()
-        lossD.backward(retain_graph=True)
-        opt_disc.step()
+            ### Train Generator:
+            output_mu, output_sigma = disc(fake)#.view(-1)
+            kl_div_G = -torch.mean(1 + torch.log(output_sigma.pow(2)+ERR_TERM) - output_mu.pow(2) - output_sigma.pow(2))#criterion(output_mu, noise, output_sigma)
+            epsilon_out = torch.randn_like(output_sigma)
+            z_out = output_mu + output_sigma * epsilon_out
+            output_match_loss = mse_loss(z_out, noise)
+            lossG = kl_div_G + criterion(output_mu, noise, output_sigma) + output_match_loss
+            gen.zero_grad()
+            lossG.backward()
+            opt_gen.step()
 
-        ### Train Generator:
-        output_mu, output_sigma = disc(fake)#.view(-1)
-        kl_div_G = -torch.mean(1 + torch.log(output_sigma.pow(2)+ERR_TERM) - output_mu.pow(2) - output_sigma.pow(2))#criterion(output_mu, noise, output_sigma)
-        epsilon_out = torch.randn_like(output_sigma)
-        z_out = output_mu + output_sigma * epsilon_out
-        output_match_loss = mse_loss(z_out, noise)
-        lossG = kl_div_G + criterion(output_mu, noise, output_sigma) + output_match_loss
-        gen.zero_grad()
-        lossG.backward()
-        opt_gen.step()
-
-        #loop.set_postfix(loss=loss.item())
-        if batch_idx == 0:
-            print(
-                f"Epoch [{epoch}/{NUM_EPOCHS}] Batch {batch_idx}/{len(train_loader)} \
-                      Loss D: {lossD:.4f}, comprised of real loss: {lossD_real:.4f} and fake loss {lossD_fake:.4f}, and loss G: {lossG:.4f}, with kldiv loss {kl_div_G:.4f}"
-            )
-
+            #loop.set_postfix(loss=loss.item())
+            if batch_idx == 0:
+                print(
+                    f"Epoch [{epoch}/{NUM_EPOCHS}] Batch {batch_idx}/{len(train_loader)} \
+                        Loss D: {lossD:.4f}, comprised of real loss: {lossD_real:.4f} and fake loss {lossD_fake:.4f}, and loss G: {lossG:.4f}, with kldiv loss {kl_div_G:.4f}"
+                )
             with torch.no_grad():
                 fake = gen(fixed_noise).reshape(-1, 1, 28, 28)
                 data = real.reshape(-1, 1, 28, 28)
@@ -89,6 +89,33 @@ for epoch in range(NUM_EPOCHS):
                #     "Mnist Real Images", img_grid_real, global_step=step
                # )
                 step += 1
+        if (epoch % 1) == 0:
+            loss_fn = nn.BCELoss(reduction="sum")
+            mu, sigma = disc.encode(real)
+            epsilon = torch.randn_like(sigma)
+            z = mu + sigma * epsilon
+            x_reconstructed = gen.decode(z)
+            # Compute loss
+            reconstruction_loss = loss_fn(x_reconstructed, real)
+            kl_div = -torch.sum(1 + torch.log(sigma.pow(2)) - mu.pow(2) - sigma.pow(2))
+
+            # Backprop
+            loss = reconstruction_loss + kl_div
+            gen.zero_grad()
+            disc.zero_grad()
+            reconstruction_loss.backward(retain_graph=True)
+            kl_div.backward()
+            opt_gen.step()
+            opt_disc.step()
+            #optimizer.zero_grad()
+            #loss.backward()
+            #optimizer.step()
+            loop.set_postfix(loss=loss.item())
+            if batch_idx == 0:
+                print(
+                    f"Epoch [{epoch}/{NUM_EPOCHS}] Batch {batch_idx}/{len(train_loader)} \
+                        Loss: {loss:.4f}"
+                )    
     #for i, (x, _) in loop:
      #   # Forward pass
      #   x = x.to(DEVICE).view(x.shape[0], INPUT_DIM)
