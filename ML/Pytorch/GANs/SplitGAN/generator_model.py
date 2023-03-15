@@ -111,7 +111,7 @@ class Generator(nn.Module):
         return torch.tanh(self.last(x))
 
 class Encoder(nn.Module):
-    def __init__(self, img_channels, num_features=32, num_residuals=9):
+    def __init__(self, img_channels, num_features=16, num_residuals=9):
         super().__init__()
         self.initial = nn.Sequential(
             nn.Conv2d(
@@ -145,26 +145,39 @@ class Encoder(nn.Module):
         self.img_2hid = nn.Linear(num_features, 50)
         self.hid_2mu = nn.Linear(50, 75)
         self.hid_2mu2 = nn.Linear(75, 125)
+        self.hid_2mu2_leak = nn.LeakyReLU(0.8)
         self.hid_2mu3 = nn.Linear(125, 150)
+        self.hid_2mu3_leak = nn.LeakyReLU(0.75)
         self.hid_2mu4 = nn.Linear(150, 250)
+        self.hid_2mu4_leak = nn.LeakyReLU(0.75)
         self.hid_2mu5 = nn.Linear(250, 375)
+        self.hid_2mu5_leak = nn.LeakyReLU(0.75)
         self.hid_2mu6 = nn.Linear(375, 750)
+        self.hid_2mu6_leak = nn.LeakyReLU(0.8)
         self.hid_2sigma = nn.Linear(50, 75)
         self.hid_2sigma2 = nn.Linear(75, 125)
+        self.hid_2sigma2_leak = nn.LeakyReLU(0.8)
         self.hid_2sigma3 = nn.Linear(125, 150)
+        self.hid_2sigma3_leak = nn.LeakyReLU(0.75)
         self.hid_2sigma4 = nn.Linear(150, 250)
+        self.hid_2sigma4_leak = nn.LeakyReLU(0.75)
         self.hid_2sigma5 = nn.Linear(250, 375)
+        self.hid_2sigma5_leak = nn.LeakyReLU(0.75)
         self.hid_2sigma6 = nn.Linear(375, 750)
         self.relu = nn.ReLU()
         self.rectify = nn.Softplus() #nn.ReLU()
     def encode(self, x):
         h = self.relu(self.img_2hid(x))
         mu2, sigma2 = self.hid_2mu2(self.hid_2mu(h)), self.hid_2sigma2(self.hid_2sigma(h))
+        mu2, sigma2 = self.hid_2mu2_leak(mu2), self.hid_2sigma2_leak(sigma2)
         mu3, sigma3 = self.hid_2mu3(mu2), self.hid_2sigma3(sigma2) #self.rectify(self.hid_2sigma(h))
+        mu3, sigma3 = self.hid_2mu3_leak(mu3), self.hid_2sigma3_leak(sigma3)
         mu4, sigma4 = self.hid_2mu4(mu3), self.hid_2sigma4(sigma3)
+        mu4, sigma4 = self.hid_2mu4_leak(mu4), self.hid_2sigma4_leak(sigma4)
         mu5, sigma5 = self.hid_2mu5(mu4), self.hid_2sigma5(sigma4)
+        mu5, sigma5 = self.hid_2mu5_leak(mu5), self.hid_2sigma5_leak(sigma5)
         mu6, sigma6 = self.hid_2mu6(mu5), self.hid_2sigma6(sigma5)
-        mu, sigma = mu6, self.rectify(sigma6)
+        mu, sigma = self.hid_2mu6_leak(mu6), self.rectify(sigma6)
         #mu, sigma = self.hid_2mu(h), self.hid_2sigma(h)
         return mu, sigma
 
@@ -178,14 +191,20 @@ class Encoder(nn.Module):
         return mu, sigma
 
 class Decoder(nn.Module):
-    def __init__(self, img_channels, num_features=32, num_residuals=9):
+    def __init__(self, img_channels, num_features=16, num_residuals=9):
         super().__init__()
         self.z_2hid = nn.Linear(750, 375)
+        self.z_2leak = nn.LeakyReLU(0.99)
         self.z_3hid = nn.Linear(375, 250)
+        self.z_3leak = nn.LeakyReLU(0.9)
         self.z_4hid = nn.Linear(250, 150)
+        self.z_4leak = nn.LeakyReLU(0.9)
         self.z_5hid = nn.Linear(150, 125)
+        self.z_5leak = nn.LeakyReLU(0.9)
         self.z_6hid = nn.Linear(125, 75)
+        self.z_6leak = nn.LeakyReLU(0.9)
         self.z_7hid = nn.Linear(75, 50)
+        self.z_7leak = nn.LeakyReLU(0.99)
         self.hid_2img = nn.Linear(50, num_features)
 
         #self.relu = nn.ReLU()
@@ -226,11 +245,17 @@ class Decoder(nn.Module):
 
     def forward(self, z):
         h = self.z_2hid(z)
+        h = self.z_2leak(h)
         x = self.z_3hid(h)
+        x = self.z_3leak(x)
         x = self.z_4hid(x)
+        x = self.z_4leak(x)
         x = self.z_5hid(x)
+        x = self.z_5leak(x)
         x = self.z_6hid(x)
+        x = self.z_6leak(x)
         x = self.z_7hid(x)
+        x = self.z_7leak(x)
         x = self.hid_2img(x)
         x = self.res_blocks(x)
         for layer in self.up_blocks:
@@ -239,13 +264,13 @@ class Decoder(nn.Module):
 
 def test():
     img_channels = 3
-    img_size = 128
+    img_size = 64
     x = torch.randn((2, img_channels, img_size, img_size))
-    enc = Encoder(img_channels, 32, 9)
+    enc = Encoder(img_channels, 16, 9)
     mu, sigma = enc(x)
     epsilon = torch.randn_like(sigma)
     z = mu + sigma * epsilon
-    dec = Decoder(img_channels, 32, 9) 
+    dec = Decoder(img_channels, 16, 9) 
     #gen = Generator(img_channels, 9)
     print(dec(z).shape)
 

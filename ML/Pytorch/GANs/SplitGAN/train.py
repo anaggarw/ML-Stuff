@@ -116,8 +116,8 @@ def train_fn(
                 + identity_horse_loss * config.LAMBDA_IDENTITY
                 + identity_zebra_loss * config.LAMBDA_IDENTITY
             )
-        kl_div_H_loss = -torch.sum(1 + torch.log(sigma_h.pow(2)+ERR_TERM) - mu_h.pow(2) - sigma_h.pow(2))
-        kl_div_Z_loss = -torch.sum(1 + torch.log(sigma_z.pow(2)+ERR_TERM) - mu_z.pow(2) - sigma_z.pow(2))
+        kl_div_H_loss = -torch.mean(1 + torch.log(sigma_h.pow(2)+ERR_TERM) - mu_h.pow(2) - sigma_h.pow(2))
+        kl_div_Z_loss = -torch.mean(1 + torch.log(sigma_z.pow(2)+ERR_TERM) - mu_z.pow(2) - sigma_z.pow(2))
         kl_div_loss = kl_div_H_loss + kl_div_Z_loss
         kl_div = kl_div_loss.mean().item()
         opt_gen.zero_grad()
